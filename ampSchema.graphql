@@ -1,0 +1,38 @@
+type Environment {
+  id: String!
+  name: String!
+  apis: List[API]
+  clusters: List[Cluster]!
+}
+
+type API {
+  id: String!
+  name: String!
+  description: String
+}
+
+enum OperatingSystemType {
+  LINUX
+  WINDOWS
+}
+
+type Server {
+  id: String!
+  name: String!
+  description: String
+  operatingSystem: String!
+}
+
+enum DeploymentType {
+  ON_PREM
+  CLOUDHUB
+  RTF
+}
+
+type Cluster {
+  id: String!
+  name: String!
+  servers: List[Server]
+  description: String
+  deploymentType: DeploymentType
+}

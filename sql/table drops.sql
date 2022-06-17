@@ -1,0 +1,10 @@
+DROP TABLE ampapiinstance;
+DROP TABLE ampenvironment;
+DROP TABLE ampserver;
+DROP TABLE ampapisystem;
+DROP TABLE ampapi;
+DROP TABLE ampcluster;
+DROP TABLE ampdeploymenttype;
+DROP TABLE ampsystem;
+DROP TABLE ampoperatingsystemtype;
+DROP TABLE ampsystemtype;

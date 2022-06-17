@@ -1,0 +1,11 @@
+query MyQuery2 {
+  joeRandomStr
+  joeRandomStr2
+  environments(name: "") {
+    apis {
+      description
+      id
+      name
+    }
+  }
+}
