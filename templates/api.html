@@ -1,0 +1,35 @@
+<html>
+   <body>
+      <h1>API {{ api.name }}</h1>
+
+      <h2>Running in Environments:</h2>
+      {% for env in environments %}
+        <li>{{env.name}}</li>
+      {% endfor %}
+
+      <h2>Source Systems</h2>
+      {% for apisys in api.apiSystems %}
+        {% if apisys.systemType.shortName == "SOURCE" %}
+        <li>{{apisys.system.name}}</li>
+        {% endif %}
+      {% endfor %}
+
+      <h2>Source ESB APIs</h2>
+      {% for api in api.clientAPIs %}
+        <li><a href="/api/{{api.name}}">{{api.name}}</a></li>
+      {% endfor %}
+
+      <h2>Target Systems</h2>
+      {% for apisys in api.apiSystems %}
+        {% if apisys.systemType.shortName == "TARGET" %}
+        <li>{{apisys.system.name}}</li>
+        {% endif %}
+      {% endfor %}
+
+      <h2>Target ESB APIs</h2>
+      {% for api in api.targetAPIs %}
+        <li><a href="/api/{{api.name}}">{{api.name}}</a></li>
+      {% endfor %}
+
+   </body>
+</html>

@@ -3,7 +3,7 @@ import sqlalchemy
 from flask import Flask, render_template
 from strawberry.flask.views import GraphQLView
 from sqlalchemy import create_engine, text, MetaData, Table, ForeignKey
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker, scoped_session
 import asyncio
 import random
 from flask_sqlalchemy import SQLAlchemy
@@ -20,6 +20,7 @@ class Environment(db.Model):
     __tablename__ = "ampenvironment"
     id = db.Column("ID",db.Integer,primary_key=True)
     name = db.Column("Name",db.String(100))
+    clusters = db.relationship("Cluster", order_by = "Cluster.id", back_populates = "environment")
 
     def __init__(self,name=""):
         self.name = name
@@ -27,18 +28,20 @@ class Environment(db.Model):
 class Cluster(db.Model):
     __tablename__ = "ampcluster"
     id = db.Column("ID",db.Integer,primary_key=True)
-    environment_id = db.Column("EnvironmentID",db.Integer,ForeignKey('ampenvironment.ID'))
+    environmentID = db.Column("EnvironmentID",db.Integer,ForeignKey('ampenvironment.ID'))
     name = db.Column("Name",db.String(100))
     description = db.Column("Description",db.String(255))
     deploymentTypeID = db.Column("DeploymentType",db.Integer,ForeignKey('ampdeploymenttype.ID'))
     environment = db.relationship("Environment", back_populates = "clusters")
-    deploymentType = db.relationship("DeploymentType")
+    deploymentType = db.relationship("DeploymentType", back_populates = "clusters")
+    servers = db.relationship("Server", order_by = "Server.id", back_populates = "cluster")
 
 class DeploymentType(db.Model):
     __tablename__ = "ampdeploymenttype"
     id = db.Column("ID",db.Integer,primary_key=True)
     shortName = db.Column("ShortName",db.String(10))
     name = db.Column("Name",db.String(100))
+    clusters = db.relationship("Cluster", order_by = "Cluster.id", back_populates = "deploymentType")
 
 class APIAPI(db.Model):
     __tablename__ = "ampapiapi"
@@ -53,14 +56,17 @@ class API(db.Model):
     description = db.Column("Description",db.String(255))
     consolePath = db.Column("ConsolePath",db.String(100))
     usesPII = db.Column("UsesPII",db.Boolean)
-    clientAPIs = db.relationship("API",secondary="ampapiapi",primaryjoin="API.id == ampapiapi.c.TargetAPIID",secondaryjoin="API.id == ampapiapi.c.SourceAPIID")
-    targetAPIs = db.relationship("API",secondary="ampapiapi",primaryjoin="API.id == ampapiapi.c.SourceAPIID",secondaryjoin="API.id == ampapiapi.c.TargetAPIID")
+    clientAPIs = db.relationship("API",secondary="ampapiapi",primaryjoin="API.id==APIAPI.targetAPIID",secondaryjoin="API.id==APIAPI.sourceAPIID",overlaps="targetAPIs")
+    targetAPIs = db.relationship("API",secondary="ampapiapi",primaryjoin="API.id==APIAPI.sourceAPIID",secondaryjoin="API.id==APIAPI.targetAPIID",overlaps="clientAPIs")
+    instances = db.relationship("APIInstance",order_by = "APIInstance.id", back_populates = "api")
+    apiSystems = db.relationship("APISystem", order_by = "APISystem.id", back_populates = "api")
 
 class System(db.Model):
     __tablename__ = "ampsystem"
     id = db.Column("ID",db.Integer,primary_key=True)
     name = db.Column("Name",db.String(100))
     description = db.Column("Description",db.String(255))
+    apiSystems = db.relationship("APISystem", order_by = "APISystem.id", back_populates = "system")
 
 class APISystem(db.Model):
     __tablename__ = "ampapisystem"
@@ -113,41 +119,13 @@ class SystemType(db.Model):
     name = db.Column("Name",db.String(100))
 
 try:
-    Environment.clusters = db.relationship("Cluster", order_by = Cluster.id, back_populates = "environment")
-    Cluster.servers = db.relationship("Server", order_by = Server.id, back_populates = "cluster")
-    API.apiSystems = db.relationship("APISystem", order_by = APISystem.id, back_populates = "api")
-    API.instances = db.relationship("APIInstance",order_by = APIInstance.id, back_populates = "api")
-    System.apiSystems = db.relationship("APISystem", order_by = APISystem.id, back_populates = "system")
-
     db.create_all()
-    clusters = (Cluster.query.filter_by(id = 2).all())
-    for c in clusters:
-        print(c.name)
-    apiInstances = (APIInstance.query.all())
-    for instance in apiInstances:
-        print(instance.id)
-        print("API {apiName} is running on cluster {clusterName} (servers: {servers}) in environment {envName}. Systems: {systems}".format(
-            apiName=instance.api.name,
-            clusterName=instance.cluster.name,
-            servers=instance.cluster.servers,
-            systems=instance.api.apiSystems,
-            envName=instance.cluster.environment.name))
-        print("API {apiName} has the following client APIs:".format(apiName=instance.api.name))
-        if instance.api.clientAPIs != None:
-            for clientAPI in instance.api.clientAPIs:
-                print(clientAPI.name)
-        print("API {apiName} has the following target APIs:".format(apiName=instance.api.name))
-        if instance.api.targetAPIs != None:
-            for targetAPI in instance.api.targetAPIs:
-                print(targetAPI.name)
-        print()
-        print()
-    print("After create_all()")
+
 except BaseException as e:
     print(e)
 finally:
     print("finally")
-    """
+
 print("About to create engine")
 print(app.config["SQLALCHEMY_DATABASE_URI"])
 try:
@@ -157,100 +135,58 @@ except BaseException as e:
     print(e)
 finally:
     print("finally")
-print("After creating engine")
-environmentTable = Table('ampenvironment',metadata_obj,autoload=True,autoload_with=engine)
-clusterTable = Table('ampcluster',metadata_obj,autoload=True,autoload_with=engine)
-print(environmentTable.columns.keys())
-select_stmt = environmentTable.select()
-print("Select statement")
-print(select_stmt)
-print(engine)
-conn = engine.connect()
-result = conn.execute(select_stmt)
-print(conn)
-print(result)
-try:
-    print(result.fetchall())
-except BaseException as e:
-    print(e)
-finally:
-    print("finally block")
-print("Hey")
+print("After creating engine1")
 
 try:
-    j = clusterTable.join(environmentTable,clusterTable.columns["EnvironmentID"] == environmentTable.columns["ID"])
-    print(j)
-    select_cluster_stmt = sqlalchemy.select([clusterTable,environmentTable]).select_from(j)
-    result2 = conn.execute(select_cluster_stmt)
-    print()
-    print()
-    print("About to fetchall!!")
-    for res in result2.fetchall():
-        print(res["EnvironmentID"])
-    #print(result2.fetchall())
+    print("Aloha")
+    c = Cluster()
+    print("Before query")
+    e = Environment.query.filter(Environment.name=="Dev").first()
+    print("Environment...")
+    print(e)
+    d = DeploymentType.query.filter(DeploymentType.shortName=="ON_PREM").first()
+    print("DeploymentType...")
+    print(d)
+    c.environment = e
+    #c.environmentID = 1
+    #c.deploymentTypeID = 1
+    c.name = "XMyOwnCluster"
+    c.description = "aaaaa abcdefg"
+    c.deploymentType = d
+    #c.deploymentTypeID = d.id
+
+    d1 = DeploymentType()
+    d1.shortName = "F1"
+    d1.name = "Fake Deployment Type"
+    print(d1.clusters)
+
+    c.deploymentType = d1
+
+    session = scoped_session(sessionmaker(autocommit=False,autoflush=False,bind=engine))
+    print(session)
+
+    print("Is there a current session for d1?")
+    print(session.object_session(d1))
+
+    """print("About to find the current session holding onto Cluster c")
+    clusterSession = session.object_session(c)
+    print(clusterSession)
+    clusterSession.close()
+
+    session.add(c)
+
+    session.commit()"""
 except BaseException as e:
+    print("except1234")
+    print(type(e))
     print(e)
 finally:
-    print("finally block 2")
-print("DONE!")"""
+    print("WOOHOO")
 
 app.add_url_rule(
     "/joegraphql",
     view_func=GraphQLView.as_view("joegraphql_view", schema=schema, graphiql=True),
 )
-
-@app.route("/hello/<user>")
-async def hello_name(user):
-    query = """
-        query MyQuery {
-          environments(name: "Q") {
-            id
-            name
-            clusters {
-              name
-              id
-              description
-              deploymentType
-              servers {
-                description
-                name
-                operatingSystem
-              }
-            }
-          }
-        }
-    """
-    res = await schema.execute(query)
-    print(type(res))
-
-    """This tells us:
-    1. What kind of database we are communicating with.
-    2. What DBAPI are we using?
-    3. How do we locate the database?
-
-    Also, note that the echo field is set to True, meaning it will emit all SQL
-    to a Python logger which will write to standard output.
-    """
-    engine = create_engine("sqlite+pysqlite:///:memory:",echo=True,future=True)
-
-
-    with Session(engine) as session:
-        createStmt = (text("CREATE TABLE some_table (x int, y int)"))
-        createResult = session.execute(createStmt)
-
-        insert_text = text("INSERT INTO some_table(x,y) VALUES (:x,:y)")
-        params=[{"x":4,"y":99},
-        {"x":12,"y":13},
-        {"x":-13,"y":77}]
-        session.execute(insert_text,params)
-
-        select_stmt = text("SELECT * FROM some_table WHERE y > :y").bindparams(y=60)
-        db_result = session.execute(select_stmt)
-        for row in db_result:
-            print(f'x: {row.x} y: {row.y}')
-
-    return render_template("hello.html",name=user,otherThing=res,)
-
 
 async def doSomethingAsync():
     print("Something")
@@ -300,3 +236,36 @@ async def index():
     print(b.data["joeRandomStr"])
     print(a)
     return "Hello World" + str(int(random.random()*1000))
+
+@app.route("/api/<apiName>")
+def apiPage(apiName):
+    api = API.query.filter_by(name = apiName).first()
+    if api == None:
+        return "No API named <b>{apiName}</b> in the AMP system.".format(apiName=apiName)
+
+    environments = []
+    for instance in api.instances:
+        environments.append(instance.cluster.environment)
+    envs=sorted(set(environments), key=lambda e: e.name)
+    return render_template("api.html",api=api,environments=envs)
+    """for instance in api.instances:
+        res += "API <b>{apiName}</b> is running on cluster {clusterName} (servers: {servers}) in environment {envName}. Systems: {systems}".format(
+            apiName=instance.api.name,
+            clusterName=instance.cluster.name,
+            servers=instance.cluster.servers,
+            systems=instance.api.apiSystems,
+            envName=instance.cluster.environment.name)
+        res += "<br /><br />"
+        res += "API {apiName} has the following client APIs:".format(apiName=instance.api.name)
+        if instance.api.clientAPIs != None:
+            for clientAPI in instance.api.clientAPIs:
+                res += clientAPI.name
+        res += "API {apiName} has the following target APIs:".format(apiName=instance.api.name)
+        if instance.api.targetAPIs != None:
+            for targetAPI in instance.api.targetAPIs:
+                res += targetAPI.name
+        print()
+        print()
+    print("After create_all()")
+    return "Hello this is the API page for API named " + apiName + "<br /><br/>" + res;
+    """
